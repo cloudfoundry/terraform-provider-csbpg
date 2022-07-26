@@ -9,6 +9,7 @@ builds:
       - darwin
     goarch:
       - amd64
+    binary: '{{ .ProjectName }}_v{{ .Version }}'
 checksum:
   name_template: 'checksums.txt'
 snapshot:
