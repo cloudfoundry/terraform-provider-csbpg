@@ -1,20 +1,18 @@
 package main_test
 
 import (
-	"csbbrokerpakgcp/providers/terraform-provider-csbpg/csbpg"
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-
-	_ "embed"
-
+	"github.com/cloudfoundry/terraform-provider-csbpg/csbpg"
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	_ "github.com/lib/pq"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

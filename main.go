@@ -1,8 +1,7 @@
 package main
 
 import (
-	"csbbrokerpakgcp/providers/terraform-provider-csbpg/csbpg"
-
+	"github.com/cloudfoundry/terraform-provider-csbpg/csbpg"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
 )
 

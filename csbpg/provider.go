@@ -22,7 +22,6 @@ const (
 )
 
 func Provider() *schema.Provider {
-
 	return &schema.Provider{
 		Schema: map[string]*schema.Schema{
 			hostKey: {
