@@ -1,4 +1,6 @@
 # documentation at https://goreleaser.com
+archives:
+  - format: zip
 builds:
   - env:
       - CGO_ENABLED=0
@@ -18,3 +20,5 @@ changelog:
       - '^docs'
       - '^test'
       - '^chore'
+      - '^build'
+      - '^docs'
