@@ -37,18 +37,30 @@ func (c connectionFactory) connect(uri string) (*sql.DB, error) {
 	return db, nil
 }
 func (c connectionFactory) uriWithCreds(username, password string) string {
-	return strings.Join([]string{
-		"host=" + c.host,
-		fmt.Sprintf("port=%d", c.port),
-		"user=" + username,
-		"password=" + password,
-		"database=" + c.database,
-		"sslmode=" + c.sslMode,
-		"sslinline=true",
-		fmt.Sprintf("sslcert='%s'", c.sslClientCert.Certificate),
-		fmt.Sprintf("sslkey='%s'", c.sslClientCert.Key),
-		fmt.Sprintf("sslrootcert='%s'", c.sslRootCert),
-	}, " ")
+	fields := map[string]string{
+		"host":     c.host,
+		"port":     fmt.Sprintf("%d", c.port),
+		"user":     username,
+		"password": password,
+		"database": c.database,
+		"sslmode":  c.sslMode,
+	}
+
+	if c.sslClientCert != nil {
+		fields["sslinline"] = "true"
+		fields["sslcert"] = fmt.Sprintf("'%s'", c.sslClientCert.Certificate)
+		fields["sslkey"] = fmt.Sprintf("'%s'", c.sslClientCert.Key)
+		fields["sslrootcert"] = fmt.Sprintf("'%s'", c.sslRootCert)
+	}
+
+	var s strings.Builder
+	for k, v := range fields {
+		s.WriteString(k)
+		s.WriteRune('=')
+		s.WriteString(v)
+		s.WriteRune(' ')
+	}
+	return s.String()
 }
 
 func (c connectionFactory) uri() string {
