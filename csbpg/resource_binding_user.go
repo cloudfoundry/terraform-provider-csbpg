@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	bindingUsernameKey = "username"
-	bindingPasswordKey = "password"
+	bindingUsernameKey       = "username"
+	bindingPasswordKey       = "password"
+	legacyBrokerBindingGroup = "binding_group"
 )
 
 func resourceBindingUser() *schema.Resource {
@@ -39,7 +40,7 @@ func resourceBindingUser() *schema.Resource {
 	}
 }
 
-func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
+func resourceBindingUserCreate(_ context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
 
 	log.Println("[DEBUG] ENTRY resourceBindingUserCreate()")
 	defer log.Println("[DEBUG] EXIT resourceBindingUserCreate()")
@@ -53,7 +54,9 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	defer db.Close()
+	defer func(db *sql.DB) {
+		_ = db.Close()
+	}(db)
 
 	log.Println("[DEBUG] connected")
 
@@ -63,7 +66,33 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 	}
 
 	log.Println("[DEBUG] create binding user")
-	_, err = db.Exec(fmt.Sprintf("CREATE ROLE %s WITH LOGIN PASSWORD %s INHERIT IN ROLE %s", pq.QuoteIdentifier(username), safeQuote(password), pq.QuoteIdentifier(cf.dataOwnerRole)))
+	userPresent, err := roleExists(db, username)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	if userPresent {
+		statements := []string{
+			fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(cf.dataOwnerRole), pq.QuoteIdentifier(username)),
+		}
+		legacyBrokerBindingGroupPresent, err := roleExists(db, legacyBrokerBindingGroup)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if legacyBrokerBindingGroupPresent {
+			for _, obj := range []string{"TABLES", "SEQUENCES", "FUNCTIONS"} {
+				statements = append(statements, fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s REVOKE ALL ON %s FROM %s", pq.QuoteIdentifier(username), obj, legacyBrokerBindingGroup))
+			}
+		}
+		for _, statement := range statements {
+			_, err := db.Exec(statement)
+			if err != nil {
+				return diag.FromErr(err)
+			}
+		}
+	} else {
+		_, err = db.Exec(fmt.Sprintf("CREATE ROLE %s WITH LOGIN PASSWORD %s INHERIT IN ROLE %s", pq.QuoteIdentifier(username), safeQuote(password), pq.QuoteIdentifier(cf.dataOwnerRole)))
+	}
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -74,7 +103,7 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 	return nil
 }
 
-func resourceBindingUserRead(ctx context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
+func resourceBindingUserRead(_ context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
 	log.Println("[DEBUG] ENTRY resourceBindingUserRead()")
 	defer log.Println("[DEBUG] EXIT resourceBindingUserRead()")
 
@@ -86,7 +115,9 @@ func resourceBindingUserRead(ctx context.Context, d *schema.ResourceData, m any)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	defer db.Close()
+	defer func(db *sql.DB) {
+		_ = db.Close()
+	}(db)
 	log.Println("[DEBUG] connected")
 
 	rows, err := db.Query(fmt.Sprintf("SELECT FROM pg_catalog.pg_roles WHERE rolname = '%s'", username))
@@ -104,11 +135,11 @@ func resourceBindingUserRead(ctx context.Context, d *schema.ResourceData, m any)
 	return nil
 }
 
-func resourceBindingUserUpdate(ctx context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
+func resourceBindingUserUpdate(_ context.Context, _ *schema.ResourceData, _ any) diag.Diagnostics {
 	return diag.FromErr(fmt.Errorf("update lifecycle not implemented"))
 }
 
-func resourceBindingUserDelete(ctx context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
+func resourceBindingUserDelete(_ context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
 	log.Println("[DEBUG] ENTRY resourceBindingUserDelete()")
 	defer log.Println("[DEBUG] EXIT resourceBindingUserDelete()")
 
@@ -121,8 +152,13 @@ func resourceBindingUserDelete(ctx context.Context, d *schema.ResourceData, m an
 	if err != nil {
 		return diag.FromErr(err)
 	}
+
+	defer func(bindingUserDBConnection *sql.DB) {
+		_ = bindingUserDBConnection.Close()
+	}(bindingUserDBConnection)
+
 	log.Println("[DEBUG] reassigning object ownership")
-	_, err = bindingUserDBConnection.Exec(fmt.Sprintf("REASSIGN OWNED BY %s TO %s", pq.QuoteIdentifier(bindingUser), pq.QuoteIdentifier(cf.dataOwnerRole)))
+	_, err = bindingUserDBConnection.Exec(fmt.Sprintf("REASSIGN OWNED BY CURRENT_USER TO %s", pq.QuoteIdentifier(cf.dataOwnerRole)))
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -131,11 +167,21 @@ func resourceBindingUserDelete(ctx context.Context, d *schema.ResourceData, m an
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	defer adminDBConnection.Close()
+
+	defer func(adminDBConnection *sql.DB) {
+		_ = adminDBConnection.Close()
+	}(adminDBConnection)
+
 	log.Println("[DEBUG] dropping binding user")
-	_, err = adminDBConnection.Exec(fmt.Sprintf("DROP ROLE %s", pq.QuoteIdentifier(bindingUser)))
-	if err != nil {
-		return diag.FromErr(err)
+	statements := []string{
+		fmt.Sprintf("REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s CASCADE;", pq.QuoteIdentifier(cf.database), pq.QuoteIdentifier(bindingUser)),
+		fmt.Sprintf("DROP ROLE %s", pq.QuoteIdentifier(bindingUser)),
+	}
+	for _, statement := range statements {
+		_, err = adminDBConnection.Exec(statement)
+		if err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
@@ -153,6 +199,9 @@ func roleExists(db *sql.DB, name string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("error finding role %q: %w", name, err)
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
 	return rows.Next(), nil
 }

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/cloudfoundry/terraform-provider-csbpg/csbpg"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/plugin"
+
+	"github.com/cloudfoundry/terraform-provider-csbpg/csbpg"
 )
 
 func main() {
