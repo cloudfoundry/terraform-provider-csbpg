@@ -8,15 +8,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudfoundry/terraform-provider-csbpg/csbpg"
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+
+	"github.com/cloudfoundry/terraform-provider-csbpg/csbpg"
 )
 
 const (
@@ -65,7 +66,9 @@ var _ = Describe("SSL Postgres Bindings", func() {
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer func(db *sql.DB) {
+				_ = db.Close()
+			}(db)
 			return db.Ping()
 		}).WithTimeout(10 * time.Second).WithPolling(time.Second).Should(Succeed())
 
@@ -263,19 +266,122 @@ EOF
 				return nil
 			})
 	})
+
+	It("will re-attach an existing legacy user", func() {
+		dataOwnerRole := "dataOwnerRole_" + uuid.New().String()
+		bindingUsername := "bindingUsername_" + uuid.New().String()
+		bindingPassword := uuid.New().String()
+		userConnectionString := buildConnectionString(bindingUsername, bindingPassword, port, database)
+
+		By("CREATING PRE-EXISTING USER AS PER THE LEGACY BROKER")
+		db, err := sql.Open("postgres", adminUserURI)
+		defer func(db *sql.DB) {
+			_ = db.Close()
+		}(db)
+		Expect(err).NotTo(HaveOccurred())
+
+		adminStatements := []string{
+			fmt.Sprintf("CREATE ROLE binding_group with role %s", pq.QuoteIdentifier(cloudsqlsuperuser)),
+			fmt.Sprintf("CREATE USER %s WITH PASSWORD %s IN ROLE binding_group", pq.QuoteIdentifier(bindingUsername), pq.QuoteLiteral(bindingPassword)),
+			fmt.Sprintf("GRANT ALL ON DATABASE %s TO %s", pq.QuoteIdentifier(database), pq.QuoteIdentifier(bindingUsername)),
+			fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(bindingUsername), pq.QuoteIdentifier(cloudsqlsuperuser)),
+		}
+
+		for _, adminStatement := range adminStatements {
+			_, err = db.Exec(adminStatement)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		By("SETTING UP USER DATA STRUCTURES")
+		userDb, err := sql.Open("postgres", userConnectionString)
+		Expect(err).NotTo(HaveOccurred())
+
+		userStatements := []string{
+			fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON TABLES TO binding_group", pq.QuoteIdentifier(bindingUsername)),
+			fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON SEQUENCES TO binding_group", pq.QuoteIdentifier(bindingUsername)),
+			fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON FUNCTIONS TO binding_group", pq.QuoteIdentifier(bindingUsername)),
+			"CREATE TABLE T1 (PK INTEGER NOT NULL PRIMARY KEY, NAME VARCHAR(30))",
+			"CREATE FUNCTION F1() RETURNS VARCHAR\nAS $$ SELECT 'f1' $$\nLANGUAGE SQL",
+		}
+		for _, userStatement := range userStatements {
+			_, err = userDb.Exec(userStatement)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		By("ADDING AND READING DATA")
+		insertResult, err := userDb.Exec("INSERT INTO T1 (PK, NAME) VALUES (1, 'Example row')")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(insertResult.RowsAffected()).To(BeEquivalentTo(1))
+
+		Expect(query(userDb, "SELECT F1() || PK || NAME FROM T1")).To(ConsistOf("f11Example row"))
+		err = userDb.Close()
+		Expect(err).NotTo(HaveOccurred())
+
+		applyHCL(fmt.Sprintf(`
+		provider "csbpg" {
+		  host            = "%s"
+		  port            = %d
+		  username        = "%s"
+		  password        = "%s"
+		  database        = "%s"
+		  data_owner_role = "%s"
+		
+		  sslrootcert = <<EOF
+%s
+EOF
+		  clientcert {
+    		cert = <<EOF
+%s
+EOF
+    		key  = <<EOF
+%s
+EOF
+  	      }
+		}
+
+		resource "csbpg_binding_user" "binding_user" {
+		  username = "%s"
+		  password = "%s"
+		}
+		`, hostname, port, cloudsqlsuperuser, cloudsqlsuperpassword, database, dataOwnerRole,
+			postgresSSLCACert, postgresSSLClientCert, postgresSSLClientKey,
+			bindingUsername, bindingPassword), func(state *terraform.State) error {
+			By("ESTABLISHING BINDING USER CONNECTION")
+			bindingDb, err := sql.Open("postgres", userConnectionString)
+			Expect(err).NotTo(HaveOccurred())
+			By("READING THE PREVIOUSLY EXISTING DATA")
+			Expect(query(bindingDb, "select f1() || NAME from t1")).To(ConsistOf("f1Example row"))
+			Expect(err).NotTo(HaveOccurred())
+			return bindingDb.Close()
+		}, func(state *terraform.State) error {
+			By("CHECKING RESOURCE DELETE")
+			db, err := sql.Open("postgres", adminUserURI)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking that the binding user is deleted")
+			rows, err := db.Query(fmt.Sprintf("SELECT FROM pg_catalog.pg_roles WHERE rolname = %s", pq.QuoteLiteral(bindingUsername)))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(rows.Next()).To(BeFalse(), fmt.Sprintf("role %q still exists", bindingUsername))
+			return nil
+		})
+	})
 })
 
 func replicateGCPPostgresEnv(port int, database, adminPassword string) {
 	adminConn, err := sql.Open("postgres", buildConnectionString(adminUsername, adminPassword, port, defaultDatabase))
 	Expect(err).NotTo(HaveOccurred())
-	defer adminConn.Close()
+	defer func(adminConn *sql.DB) {
+		_ = adminConn.Close()
+	}(adminConn)
 
 	_, err = adminConn.Exec(fmt.Sprintf("CREATE ROLE %s WITH LOGIN PASSWORD '%s' NOSUPERUSER CREATEDB CREATEROLE", cloudsqlsuperuser, cloudsqlsuperpassword))
 	Expect(err).NotTo(HaveOccurred())
 
 	cloudSQLSuperUserConn, err := sql.Open("postgres", buildConnectionString(cloudsqlsuperuser, cloudsqlsuperpassword, port, defaultDatabase))
 	Expect(err).NotTo(HaveOccurred())
-	defer cloudSQLSuperUserConn.Close()
+	defer func(cloudSQLSuperUserConn *sql.DB) {
+		_ = cloudSQLSuperUserConn.Close()
+	}(cloudSQLSuperUserConn)
 
 	_, err = cloudSQLSuperUserConn.Exec(fmt.Sprintf("CREATE DATABASE \"%s\"", database))
 	Expect(err).NotTo(HaveOccurred())

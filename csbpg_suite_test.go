@@ -25,10 +25,6 @@ var _ = BeforeSuite(func() {
 	createVolume("ssl_postgres")
 })
 
-var _ = AfterSuite(func() {
-
-})
-
 func freePort() int {
 	listener, err := net.Listen("tcp", "localhost:0")
 	Expect(err).NotTo(HaveOccurred())
@@ -37,24 +33,24 @@ func freePort() int {
 }
 
 func createVolume(fixtureName string) {
-	path := path.Join(getPWD(), "testfixtures", fixtureName)
+	fixturePath := path.Join(getPWD(), "testfixtures", fixtureName)
 	mustRun("docker", "volume", "create", fixtureName)
 	for _, folder := range []string{"certs", "keys", "pgconf"} {
 		mustRun("docker", "run",
-			"-v", path+":/fixture",
+			"-v", fixturePath+":/fixture",
 			"--mount", fmt.Sprintf("source=%s,destination=/mnt", fixtureName),
 			"postgres", "rm", "-rf", "/mnt/"+folder)
 		mustRun("docker", "run",
-			"-v", path+":/fixture",
+			"-v", fixturePath+":/fixture",
 			"--mount", fmt.Sprintf("source=%s,destination=/mnt", fixtureName),
 			"postgres", "cp", "-r", "/fixture/"+folder, "/mnt")
 	}
 	mustRun("docker", "run",
-		"-v", path+":/fixture",
+		"-v", fixturePath+":/fixture",
 		"--mount", fmt.Sprintf("source=%s,destination=/mnt", fixtureName),
 		"postgres", "chmod", "-R", "0600", "/mnt/keys/server.key")
 	mustRun("docker", "run",
-		"-v", path+":/fixture",
+		"-v", fixturePath+":/fixture",
 		"--mount", fmt.Sprintf("source=%s,destination=/mnt", fixtureName),
 		"postgres", "chown", "-R", "postgres:postgres", "/mnt/keys/server.key")
 }
