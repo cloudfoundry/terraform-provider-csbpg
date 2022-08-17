@@ -4,25 +4,19 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"sync"
 
 	"github.com/lib/pq"
 )
 
-var sharedDataOwnerRoleCreateMutex sync.Mutex
-
-func createDataOwnerRole(db *sql.DB, cf connectionFactory) error {
-	sharedDataOwnerRoleCreateMutex.Lock()
-	defer sharedDataOwnerRoleCreateMutex.Unlock()
-
-	exists, err := roleExists(db, cf.dataOwnerRole)
+func createDataOwnerRole(tx *sql.Tx, cf connectionFactory) error {
+	exists, err := roleExists(tx, cf.dataOwnerRole)
 	if err != nil {
 		return err
 	}
 
 	if !exists {
 		log.Println("[DEBUG] data owner role does not exist - creating")
-		_, err = db.Exec(fmt.Sprintf("CREATE ROLE %s WITH NOLOGIN", pq.QuoteIdentifier(cf.dataOwnerRole)))
+		_, err = tx.Exec(fmt.Sprintf("CREATE ROLE %s WITH NOLOGIN", pq.QuoteIdentifier(cf.dataOwnerRole)))
 
 		if err != nil {
 			return err
@@ -30,11 +24,11 @@ func createDataOwnerRole(db *sql.DB, cf connectionFactory) error {
 	}
 
 	log.Println("[DEBUG] granting data owner role")
-	_, err = db.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s", pq.QuoteIdentifier(cf.database), pq.QuoteIdentifier(cf.dataOwnerRole)))
+	_, err = tx.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s", pq.QuoteIdentifier(cf.database), pq.QuoteIdentifier(cf.dataOwnerRole)))
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %s", pq.QuoteIdentifier(cf.dataOwnerRole)))
+	_, err = tx.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %s", pq.QuoteIdentifier(cf.dataOwnerRole)))
 	return err
 }
