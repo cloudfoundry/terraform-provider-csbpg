@@ -175,7 +175,7 @@ EOF
 			})
 	})
 
-	It("can create multiple binding user", func() {
+	It("can create multiple binding users", func() {
 		dataOwnerRole := uuid.New().String()
 		bindingUsername1 := uuid.New().String()
 		bindingPassword1 := uuid.New().String()

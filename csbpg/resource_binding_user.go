@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -16,6 +17,11 @@ const (
 	bindingUsernameKey       = "username"
 	bindingPasswordKey       = "password"
 	legacyBrokerBindingGroup = "binding_group"
+)
+
+var (
+	createBindingMutex sync.Mutex
+	deleteBindingMutex sync.Mutex
 )
 
 func resourceBindingUser() *schema.Resource {
@@ -40,7 +46,9 @@ func resourceBindingUser() *schema.Resource {
 	}
 }
 
-func resourceBindingUserCreate(_ context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
+func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
+	createBindingMutex.Lock()
+	defer createBindingMutex.Unlock()
 
 	log.Println("[DEBUG] ENTRY resourceBindingUserCreate()")
 	defer log.Println("[DEBUG] EXIT resourceBindingUserCreate()")
@@ -58,15 +66,20 @@ func resourceBindingUserCreate(_ context.Context, d *schema.ResourceData, m any)
 		_ = db.Close()
 	}(db)
 
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{})
+	defer func(tx *sql.Tx) {
+		_ = tx.Rollback()
+	}(tx)
+
 	log.Println("[DEBUG] connected")
 
-	err = createDataOwnerRole(db, cf)
+	err = createDataOwnerRole(tx, cf)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
 	log.Println("[DEBUG] create binding user")
-	userPresent, err := roleExists(db, username)
+	userPresent, err := roleExists(tx, username)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -75,7 +88,7 @@ func resourceBindingUserCreate(_ context.Context, d *schema.ResourceData, m any)
 		statements := []string{
 			fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(cf.dataOwnerRole), pq.QuoteIdentifier(username)),
 		}
-		legacyBrokerBindingGroupPresent, err := roleExists(db, legacyBrokerBindingGroup)
+		legacyBrokerBindingGroupPresent, err := roleExists(tx, legacyBrokerBindingGroup)
 		if err != nil {
 			return diag.FromErr(err)
 		}
@@ -85,14 +98,19 @@ func resourceBindingUserCreate(_ context.Context, d *schema.ResourceData, m any)
 			}
 		}
 		for _, statement := range statements {
-			_, err := db.Exec(statement)
+			_, err := tx.Exec(statement)
 			if err != nil {
 				return diag.FromErr(err)
 			}
 		}
 	} else {
-		_, err = db.Exec(fmt.Sprintf("CREATE ROLE %s WITH LOGIN PASSWORD %s INHERIT IN ROLE %s", pq.QuoteIdentifier(username), safeQuote(password), pq.QuoteIdentifier(cf.dataOwnerRole)))
+		_, err = tx.Exec(fmt.Sprintf("CREATE ROLE %s WITH LOGIN PASSWORD %s INHERIT IN ROLE %s", pq.QuoteIdentifier(username), safeQuote(password), pq.QuoteIdentifier(cf.dataOwnerRole)))
 	}
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	err = tx.Commit()
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -139,49 +157,63 @@ func resourceBindingUserUpdate(_ context.Context, _ *schema.ResourceData, _ any)
 	return diag.FromErr(fmt.Errorf("update lifecycle not implemented"))
 }
 
-func resourceBindingUserDelete(_ context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
+func resourceBindingUserDelete(ctx context.Context, d *schema.ResourceData, m any) diag.Diagnostics {
 	log.Println("[DEBUG] ENTRY resourceBindingUserDelete()")
 	defer log.Println("[DEBUG] EXIT resourceBindingUserDelete()")
+
+	deleteBindingMutex.Lock()
+	defer deleteBindingMutex.Unlock()
 
 	bindingUser := d.Get(bindingUsernameKey).(string)
 	bindingUserPassword := d.Get(bindingPasswordKey).(string)
 
 	cf := m.(connectionFactory)
 
-	bindingUserDBConnection, err := cf.ConnectAsUser(bindingUser, bindingUserPassword)
+	userDb, err := cf.ConnectAsUser(bindingUser, bindingUserPassword)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	defer func(bindingUserDBConnection *sql.DB) {
-		_ = bindingUserDBConnection.Close()
-	}(bindingUserDBConnection)
-
-	log.Println("[DEBUG] reassigning object ownership")
-	_, err = bindingUserDBConnection.Exec(fmt.Sprintf("REASSIGN OWNED BY CURRENT_USER TO %s", pq.QuoteIdentifier(cf.dataOwnerRole)))
+	_, err = userDb.ExecContext(ctx, fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(bindingUser), pq.QuoteIdentifier(cf.username)))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	adminDBConnection, err := cf.ConnectAsAdmin()
+	db, err := cf.ConnectAsAdmin()
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	defer func(adminDBConnection *sql.DB) {
-		_ = adminDBConnection.Close()
-	}(adminDBConnection)
+	defer func(connection *sql.DB) {
+		_ = connection.Close()
+	}(db)
+
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer func(transaction *sql.Tx) {
+		_ = transaction.Rollback()
+	}(tx)
 
 	log.Println("[DEBUG] dropping binding user")
 	statements := []string{
+		fmt.Sprintf("SET ROLE %s", pq.QuoteIdentifier(bindingUser)),
+		fmt.Sprintf("REASSIGN OWNED BY CURRENT_USER TO %s", pq.QuoteIdentifier(cf.dataOwnerRole)),
+		fmt.Sprintf("SET ROLE %s", pq.QuoteIdentifier(cf.username)),
 		fmt.Sprintf("REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s CASCADE;", pq.QuoteIdentifier(cf.database), pq.QuoteIdentifier(bindingUser)),
 		fmt.Sprintf("DROP ROLE %s", pq.QuoteIdentifier(bindingUser)),
 	}
 	for _, statement := range statements {
-		_, err = adminDBConnection.Exec(statement)
+		_, err = tx.Exec(statement)
 		if err != nil {
 			return diag.FromErr(err)
 		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	return nil
@@ -191,11 +223,11 @@ func safeQuote(s string) string {
 	return fmt.Sprintf("'%s'", strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `'`, `\\`))
 }
 
-func roleExists(db *sql.DB, name string) (bool, error) {
+func roleExists(tx *sql.Tx, name string) (bool, error) {
 	log.Println("[DEBUG] ENTRY roleExists()")
 	defer log.Println("[DEBUG] EXIT roleExists()")
 
-	rows, err := db.Query(fmt.Sprintf("SELECT FROM pg_catalog.pg_roles WHERE rolname = '%s'", name))
+	rows, err := tx.Query(fmt.Sprintf("SELECT FROM pg_catalog.pg_roles WHERE rolname = '%s'", name))
 	if err != nil {
 		return false, fmt.Errorf("error finding role %q: %w", name, err)
 	}
