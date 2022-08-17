@@ -67,6 +67,9 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 	}(db)
 
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	defer func(tx *sql.Tx) {
 		_ = tx.Rollback()
 	}(tx)
