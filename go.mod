@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.23.0
 	github.com/lib/pq v1.10.7
-	github.com/onsi/ginkgo/v2 v2.2.0
+	github.com/onsi/ginkgo/v2 v2.3.0
 	github.com/onsi/gomega v1.22.0
 	golang.org/x/tools v0.1.12
 	honnef.co/go/tools v0.3.3
