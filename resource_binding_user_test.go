@@ -54,7 +54,7 @@ var _ = Describe("SSL Postgres Bindings", func() {
 			"-e", fmt.Sprintf("POSTGRES_DB=%s", defaultDatabase),
 			"-p", fmt.Sprintf("%d:5432", port),
 			"--mount", "source=ssl_postgres,destination=/mnt",
-			"-t", "postgres",
+			"-t", "postgres:14",
 			"-c", "config_file=/mnt/pgconf/postgresql.conf",
 			"-c", "hba_file=/mnt/pgconf/pg_hba.conf",
 		)
