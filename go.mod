@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.24.0
 	github.com/lib/pq v1.10.7
 	github.com/onsi/ginkgo/v2 v2.3.0
-	github.com/onsi/gomega v1.22.0
+	github.com/onsi/gomega v1.22.1
 	golang.org/x/tools v0.2.0
 	honnef.co/go/tools v0.3.3
 )
