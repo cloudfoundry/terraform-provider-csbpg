@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.25.0
 	github.com/lib/pq v1.10.7
 	github.com/onsi/ginkgo/v2 v2.8.2
-	github.com/onsi/gomega v1.27.0
+	github.com/onsi/gomega v1.27.1
 	golang.org/x/tools v0.6.0
 	honnef.co/go/tools v0.4.2
 )
@@ -56,7 +56,7 @@ require (
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20221208152030-732eee02a75a // indirect
 	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/net v0.6.0 // indirect
+	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	google.golang.org/appengine v1.6.6 // indirect
