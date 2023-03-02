@@ -44,7 +44,7 @@ fmt: ## format the code
 
 .PHONY: ginkgo
 ginkgo: ## run the tests with Ginkgo
-	go run github.com/onsi/ginkgo/v2/ginkgo -r
+	go run github.com/onsi/ginkgo/v2/ginkgo -r -v
 
 .PHONY: version
 version:

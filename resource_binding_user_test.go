@@ -58,6 +58,7 @@ var _ = Describe("SSL Postgres Bindings", func() {
 			"-c", "config_file=/mnt/pgconf/postgresql.conf",
 			"-c", "hba_file=/mnt/pgconf/pg_hba.conf",
 		)
+		GinkgoWriter.Printf("running: %s\n", cmd)
 		session, err = gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
 		Expect(err).NotTo(HaveOccurred())
 
