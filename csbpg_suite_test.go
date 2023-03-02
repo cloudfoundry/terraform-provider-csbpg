@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,11 +57,12 @@ func createVolume(fixtureName string) {
 }
 
 func mustRun(command ...string) {
+	GinkgoWriter.Printf("running: %s\n", strings.Join(command, " "))
 	start, err := gexec.Start(exec.Command(
 		command[0], command[1:]...,
 	), GinkgoWriter, GinkgoWriter)
 	Expect(err).NotTo(HaveOccurred())
-	Eventually(start).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(gexec.Exit(0))
+	Eventually(start).WithTimeout(time.Minute).WithPolling(time.Second).Should(gexec.Exit(0))
 }
 
 func getPWD() string {
