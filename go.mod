@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.26.1
-	github.com/lib/pq v1.10.8
+	github.com/lib/pq v1.10.9
 	github.com/onsi/ginkgo/v2 v2.9.2
 	github.com/onsi/gomega v1.27.6
 	golang.org/x/tools v0.8.0
