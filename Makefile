@@ -18,6 +18,9 @@ build: version download checkfmt checkimports vet $(SRC) ## build the provider
 .PHONY: clean
 clean: ## clean up build artifacts
 	- rm -rf dist
+	rm -rf /tmp/tpcsbpg-non-fake.txt
+	rm -rf /tmp/tpcsbpg-pkgs.txt
+	rm -rf /tmp/tpcsbpg-coverage.out
 
 download: ## download dependencies
 	go mod download
@@ -45,6 +48,13 @@ fmt: ## format the code
 .PHONY: ginkgo
 ginkgo: ## run the tests with Ginkgo
 	go run github.com/onsi/ginkgo/v2/ginkgo -r -v
+
+.PHONY: ginkgo-coverage
+ginkgo-coverage: ## ginkgo coverage score
+	go list ./... | grep -v fake > /tmp/tpcsbpg-non-fake.txt
+	paste -sd "," /tmp/tpcsbpg-non-fake.txt > /tmp/tpcsbpg-pkgs.txt
+	go test -coverpkg=`cat /tmp/tpcsbpg-pkgs.txt` -coverprofile=/tmp/tpcsbpg-coverage.out ./...
+	go tool cover -func /tmp/tpcsbpg-coverage.out | grep total
 
 .PHONY: version
 version:
