@@ -29,6 +29,11 @@ func createDataOwnerRole(tx *sql.Tx, cf connectionFactory) error {
 		return fmt.Errorf("granting database privilege to datawoner role: %w", err)
 	}
 
+	log.Println("[DEBUG] granting permission on schema public to data owner role (required since postgres 15)")
+	if _, err := tx.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON SCHEMA PUBLIC TO %s", pq.QuoteIdentifier(cf.dataOwnerRole))); err != nil {
+		return fmt.Errorf("granting all privileges on schema public to datawoner role: %w", err)
+	}
+
 	if _, err := tx.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO %s", pq.QuoteIdentifier(cf.dataOwnerRole))); err != nil {
 		return fmt.Errorf("granting table privilege to datawoner role: %w", err)
 	}
