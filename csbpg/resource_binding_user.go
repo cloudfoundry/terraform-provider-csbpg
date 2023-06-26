@@ -108,6 +108,9 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 		if _, err := tx.Exec(fmt.Sprintf("CREATE ROLE %s WITH LOGIN PASSWORD %s INHERIT IN ROLE %s", pq.QuoteIdentifier(username), safeQuote(password), pq.QuoteIdentifier(cf.dataOwnerRole))); err != nil {
 			return diag.Errorf("creating binding role: %s", err)
 		}
+		if _, err = tx.Exec(fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(username), pq.QuoteIdentifier(cf.username))); err != nil {
+			return diag.Errorf("grant admin the right to impersonate new role and manipulate its objects: %s", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
