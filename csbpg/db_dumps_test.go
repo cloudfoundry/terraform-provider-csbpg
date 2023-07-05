@@ -11,13 +11,13 @@ import (
 )
 
 var _ = Describe("for every supported Postgres and IAAS combination", Label("dumps"), func() {
-	When("we use a dump from GCP's postgres 14", func() { testBindingCreation("14", "gcp_pg14.sql") })
-	When("we use a dump from GCP's postgres 15", func() { testBindingCreation("15", "gcp_pg15.sql") })
-	When("we use a dump from AWS's postgres 14", func() { testBindingCreation("14", "aws_pg14.sql") })
-	When("we use a dump from AWS's postgres 15", func() { testBindingCreation("15", "aws_pg15.sql") })
+	When("we use a dump from GCP's postgres 14", func() { testBindingCommonOps("14", "gcp_pg14.sql") })
+	When("we use a dump from GCP's postgres 15", func() { testBindingCommonOps("15", "gcp_pg15.sql") })
+	When("we use a dump from AWS's postgres 14", func() { testBindingCommonOps("14", "aws_pg14.sql") })
+	When("we use a dump from AWS's postgres 15", func() { testBindingCommonOps("15", "aws_pg15.sql") })
 })
 
-func testBindingCreation(pgVersion, dumpFile string) {
+func testBindingCommonOps(pgVersion, dumpFile string) {
 	var factory connectionFactory
 	var err error
 
@@ -31,7 +31,7 @@ func testBindingCreation(pgVersion, dumpFile string) {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("creating a table in public schema doesn't break binding creation", func() {
+	It("can perform all common operations with bindings", func() {
 		ctx := context.TODO()
 
 		By("creating a new user", func() {
@@ -51,6 +51,28 @@ func testBindingCreation(pgVersion, dumpFile string) {
 			diag := sqlUserCreate(ctx, "otheruser", "otheruser", factory)
 			Expect(diag).To(BeNil())
 		})
+
+		By("deleting the first user", func() {
+			diag := sqlUserDelete(ctx, "someuser", "someuser", factory)
+			Expect(diag).To(BeNil())
+		})
+
+		By("reading the table created by the now deleted first user", func() {
+			db, err := factory.ConnectAsUser("otheruser", "otheruser")
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+			_, err = db.Exec("SELECT * FROM PUBLIC.AAA;")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("failing to read a non existing table", func() {
+			db, err := factory.ConnectAsUser("otheruser", "otheruser")
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+			_, err = db.Exec("SELECT * FROM PUBLIC.NON-EXISTING;")
+			Expect(err).To(HaveOccurred())
+		})
+
 	})
 }
 
