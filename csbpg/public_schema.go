@@ -14,7 +14,7 @@ func relaxPublicSchemaRestrictions(tx *sql.Tx, cf connectionFactory) error {
 		return fmt.Errorf("make schema public be owned by public admin user: %s", err)
 	}
 	log.Println("[DEBUG] granting permission on schema public to all users (required since postgres 15)")
-	if _, err := tx.Exec(fmt.Sprintf("GRANT ALL ON SCHEMA PUBLIC TO PUBLIC")); err != nil {
+	if _, err := tx.Exec(fmt.Sprint("GRANT ALL ON SCHEMA PUBLIC TO PUBLIC")); err != nil {
 		return fmt.Errorf("granting all privileges on schema public to all users: %s", err)
 	}
 
