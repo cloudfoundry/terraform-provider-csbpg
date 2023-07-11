@@ -1,7 +1,8 @@
 --
 -- PostgreSQL database cluster dump
--- This dump was exported using the following command:
--- pg_dumpall --no-role-passwords -h SOME_HOST -U postgres --exclude-database=rdsadmin -f aws_pg15.sql
+-- This dump was exported using the following commands:
+-- pg_dumpall --if-exists --clean --no-role-passwords --exclude-database rdsadmin -h SOME_HOST -U SOME_USER -f aws_pg15.sql
+-- sed -i 's/SOME_USER/testuser/' aws_pg15.sql
 --
 
 SET default_transaction_read_only = off;
@@ -10,11 +11,41 @@ SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 
 --
+-- Drop databases (except postgres and template1)
+--
+
+DROP DATABASE IF EXISTS rdsadmin;
+DROP DATABASE IF EXISTS testdb;
+
+
+--
+-- Drop tablespaces
+--
+
+DROP TABLESPACE IF EXISTS rds_temp_tablespace;
+
+
+--
+-- Drop roles
+--
+
+DROP ROLE IF EXISTS "testuser";
+DROP ROLE IF EXISTS rds_ad;
+DROP ROLE IF EXISTS rds_iam;
+DROP ROLE IF EXISTS rds_password;
+DROP ROLE IF EXISTS rds_replication;
+DROP ROLE IF EXISTS rds_superuser;
+DROP ROLE IF EXISTS rdsadmin;
+DROP ROLE IF EXISTS rdsrepladmin;
+DROP ROLE IF EXISTS rdstopmgr;
+
+
+--
 -- Roles
 --
 
-CREATE ROLE postgres;
-ALTER ROLE postgres WITH NOSUPERUSER INHERIT CREATEROLE CREATEDB LOGIN NOREPLICATION NOBYPASSRLS VALID UNTIL 'infinity';
+CREATE ROLE "testuser";
+ALTER ROLE "testuser" WITH NOSUPERUSER INHERIT CREATEROLE CREATEDB LOGIN NOREPLICATION NOBYPASSRLS VALID UNTIL 'infinity';
 CREATE ROLE rds_ad;
 ALTER ROLE rds_ad WITH NOSUPERUSER INHERIT NOCREATEROLE NOCREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS;
 CREATE ROLE rds_iam;
@@ -53,7 +84,6 @@ ALTER ROLE rdsadmin SET search_path TO 'pg_catalog', 'public';
 ALTER ROLE rdsadmin SET synchronous_commit TO 'local';
 ALTER ROLE rdsadmin SET default_tablespace TO '';
 ALTER ROLE rdsadmin SET stats_fetch_consistency TO 'snapshot';
-ALTER ROLE rdsadmin SET idle_session_timeout TO '0';
 ALTER ROLE rdsadmin SET "pg_hint_plan.enable_hint" TO 'off';
 ALTER ROLE rdsadmin SET default_transaction_read_only TO 'off';
 
@@ -73,7 +103,6 @@ ALTER ROLE rdstopmgr SET role TO 'rdstopmgr';
 ALTER ROLE rdstopmgr SET temp_file_limit TO '-1';
 ALTER ROLE rdstopmgr SET "pg_hint_plan.enable_hint" TO 'off';
 ALTER ROLE rdstopmgr SET default_transaction_read_only TO 'off';
-ALTER ROLE rdstopmgr SET idle_session_timeout TO '0';
 
 
 --
@@ -89,7 +118,7 @@ GRANT pg_signal_backend TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
 GRANT pg_write_all_data TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
 GRANT rds_password TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
 GRANT rds_replication TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
-GRANT rds_superuser TO postgres GRANTED BY rdsadmin;
+GRANT rds_superuser TO "testuser" GRANTED BY rdsadmin;
 
 
 
@@ -110,13 +139,152 @@ GRANT ALL ON TABLESPACE rds_temp_tablespace TO PUBLIC;
 -- Database "template1" dump
 --
 
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 15.2
+-- Dumped by pg_dump version 15.3 (Debian 15.3-1.pgdg120+1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+UPDATE pg_catalog.pg_database SET datistemplate = false WHERE datname = 'template1';
+DROP DATABASE template1;
+--
+-- Name: template1; Type: DATABASE; Schema: -; Owner: testuser
+--
+
+CREATE DATABASE template1 WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
+
+
+ALTER DATABASE template1 OWNER TO "testuser";
+
 \connect template1
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: DATABASE template1; Type: COMMENT; Schema: -; Owner: testuser
+--
+
+COMMENT ON DATABASE template1 IS 'default template for new databases';
+
+
+--
+-- Name: template1; Type: DATABASE PROPERTIES; Schema: -; Owner: testuser
+--
+
+ALTER DATABASE template1 IS_TEMPLATE = true;
+
+
+\connect template1
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: DATABASE template1; Type: ACL; Schema: -; Owner: testuser
+--
+
+REVOKE CONNECT,TEMPORARY ON DATABASE template1 FROM PUBLIC;
+GRANT CONNECT ON DATABASE template1 TO PUBLIC;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+--
+-- Database "postgres" dump
+--
 
 --
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 15.3
+-- Dumped from database version 15.2
+-- Dumped by pg_dump version 15.3 (Debian 15.3-1.pgdg120+1)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+DROP DATABASE postgres;
+--
+-- Name: postgres; Type: DATABASE; Schema: -; Owner: testuser
+--
+
+CREATE DATABASE postgres WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
+
+
+ALTER DATABASE postgres OWNER TO "testuser";
+
+\connect postgres
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: DATABASE postgres; Type: COMMENT; Schema: -; Owner: testuser
+--
+
+COMMENT ON DATABASE postgres IS 'default administrative connection database';
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+--
+-- Database "testdb" dump
+--
+
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 15.2
 -- Dumped by pg_dump version 15.3 (Debian 15.3-1.pgdg120+1)
 
 SET statement_timeout = 0;
@@ -131,21 +299,15 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- PostgreSQL database dump complete
+-- Name: testdb; Type: DATABASE; Schema: -; Owner: testuser
 --
 
---
--- Database "postgres" dump
---
+CREATE DATABASE testdb WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
 
-\connect postgres
 
---
--- PostgreSQL database dump
---
+ALTER DATABASE testdb OWNER TO "testuser";
 
--- Dumped from database version 15.3
--- Dumped by pg_dump version 15.3 (Debian 15.3-1.pgdg120+1)
+\connect testdb
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -165,4 +327,3 @@ SET row_security = off;
 --
 -- PostgreSQL database cluster dump complete
 --
-

@@ -87,15 +87,25 @@ func sqlUserCreate(ctx context.Context, username, password string, m any) diag.D
 		return diag.FromErr(err)
 	}
 
+	userPresent, err := roleExists(tx, username)
+	if err != nil {
+		return diag.Errorf("checking whether binding user exists: %s", err)
+	}
+
+	if userPresent {
+		// The following instruction ensures admin has access and permissions over any objects created by the legacy user
+		// We need to do this before executing the createDataOwnerRole because there are some instructions in that function
+		// which can fail if there are tables in public schema for which the admin user doesn't have elevated permissions
+		if _, err = tx.Exec(fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(username), pq.QuoteIdentifier(cf.username))); err != nil {
+			return diag.Errorf("grant admin the right to impersonate new role and manipulate its objects: %s", err)
+		}
+	}
+
 	if err := createDataOwnerRole(tx, cf); err != nil {
 		return diag.FromErr(err)
 	}
 
 	log.Println("[DEBUG] create binding user")
-	userPresent, err := roleExists(tx, username)
-	if err != nil {
-		return diag.Errorf("checking whether binding user exists: %s", err)
-	}
 
 	if userPresent {
 		statements := []string{

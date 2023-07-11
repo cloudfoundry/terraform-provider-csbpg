@@ -16,6 +16,7 @@ var _ = Describe("for every supported Postgres and IAAS combination", Label("dum
 	When("we use a dump from AWS's postgres 14", func() { testBindingCommonOps("14", "aws_pg14.sql") })
 	When("we use a dump from AWS's postgres 15", func() { testBindingCommonOps("15", "aws_pg15.sql") })
 	When("we use a dump from AWS's aurora postgres 14", func() { testBindingCommonOps("14", "aws_aurora_pg14.sql") })
+	When("we use a dump from AWS's aurora postgres 15", func() { testBindingCommonOps("15", "aws_aurora_pg15.sql") })
 })
 
 func testBindingCommonOps(pgVersion, dumpFile string) {
@@ -103,9 +104,9 @@ func preparePostgresInstance(pgVersion, dumpFile string) (connectionFactory, err
 	return connectionFactory{
 		host:          "localhost",
 		port:          5999,
-		username:      "postgres",
+		username:      "testuser",
 		password:      "password-test",
-		database:      "postgres",
+		database:      "testdb",
 		dataOwnerRole: "binding_user_group",
 		sslMode:       "disable",
 	}, nil

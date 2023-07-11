@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -21,11 +20,14 @@ import (
 )
 
 const (
-	adminUsername         = "postgres"
-	cloudsqlsuperuser     = "cloudsqlsuperuser"
-	cloudsqlsuperpassword = "password"
+	adminUsername         = "testuser"
+	adminPassword         = "test-password"
+	cloudsqlsuperuser     = "restoredump"
+	cloudsqlsuperpassword = "restoredump"
 	hostname              = "localhost"
-	defaultDatabase       = "default"
+	defaultDatabase       = "restoredump"
+	port                  = 5999
+	database              = "testdb"
 )
 
 //go:embed "testfixtures/ssl_postgres/certs/ca.crt"
@@ -38,48 +40,18 @@ var postgresSSLClientCert string
 var postgresSSLClientKey string
 
 var _ = Describe("SSL Postgres Bindings", func() {
-	var session *gexec.Session
-	var adminUserURI, adminPassword, database string
-	var port int
+	var adminUserURI string
+	var err error
 
 	BeforeEach(func() {
-		var err error
-		adminPassword = uuid.New().String()
-		database = uuid.New().String()
-		port = freePort()
-
-		cmd := exec.Command(
-			"docker", "run",
-			"-e", fmt.Sprintf("POSTGRES_PASSWORD=%s", adminPassword),
-			"-e", fmt.Sprintf("POSTGRES_DB=%s", defaultDatabase),
-			"-p", fmt.Sprintf("%d:5432", port),
-			"--mount", "source=ssl_postgres,destination=/mnt",
-			"-t", "postgres:14",
-			"-c", "config_file=/mnt/pgconf/postgresql.conf",
-			"-c", "hba_file=/mnt/pgconf/pg_hba.conf",
-		)
-		GinkgoWriter.Printf("running: %s\n", cmd)
-		session, err = gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
+		err = preparePostgresInstance("14", "gcp_pg14.sql")
 		Expect(err).NotTo(HaveOccurred())
-
-		Eventually(func() error {
-			db, err := sql.Open("postgres", buildConnectionString(adminUsername, adminPassword, port, defaultDatabase))
-			if err != nil {
-				return err
-			}
-			defer func(db *sql.DB) {
-				_ = db.Close()
-			}(db)
-			return db.Ping()
-		}).WithTimeout(10 * time.Second).WithPolling(time.Second).Should(Succeed())
-
-		replicateGCPPostgresEnv(port, database, adminPassword)
-
-		adminUserURI = buildConnectionString(adminUsername, adminPassword, port, database)
+		adminUserURI = buildConnectionString(cloudsqlsuperuser, cloudsqlsuperpassword, port, database)
 	})
 
 	AfterEach(func() {
-		session.Terminate()
+		err = cleanPostgresInstance("14", "gcp_pg14.sql")
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("creates a binding user", func() {
@@ -112,7 +84,7 @@ EOF
 		  username = "%s"
 		  password = "%s"
 		}
-		`, hostname, port, cloudsqlsuperuser, cloudsqlsuperpassword, database, dataOwnerRole,
+		`, hostname, port, adminUsername, adminPassword, database, dataOwnerRole,
 			postgresSSLCACert, postgresSSLClientCert, postgresSSLClientKey,
 			bindingUsername, bindingPassword),
 			func(state *terraform.State) error {
@@ -344,7 +316,7 @@ EOF
 		  username = "%s"
 		  password = "%s"
 		}
-		`, hostname, port, cloudsqlsuperuser, cloudsqlsuperpassword, database, dataOwnerRole,
+		`, hostname, port, adminUsername, adminPassword, database, dataOwnerRole,
 			postgresSSLCACert, postgresSSLClientCert, postgresSSLClientKey,
 			bindingUsername, bindingPassword), func(state *terraform.State) error {
 			By("ESTABLISHING BINDING USER CONNECTION")
@@ -367,26 +339,6 @@ EOF
 		})
 	})
 })
-
-func replicateGCPPostgresEnv(port int, database, adminPassword string) {
-	adminConn, err := sql.Open("postgres", buildConnectionString(adminUsername, adminPassword, port, defaultDatabase))
-	Expect(err).NotTo(HaveOccurred())
-	defer func(adminConn *sql.DB) {
-		_ = adminConn.Close()
-	}(adminConn)
-
-	_, err = adminConn.Exec(fmt.Sprintf("CREATE ROLE %s WITH LOGIN PASSWORD '%s' NOSUPERUSER CREATEDB CREATEROLE", cloudsqlsuperuser, cloudsqlsuperpassword))
-	Expect(err).NotTo(HaveOccurred())
-
-	cloudSQLSuperUserConn, err := sql.Open("postgres", buildConnectionString(cloudsqlsuperuser, cloudsqlsuperpassword, port, defaultDatabase))
-	Expect(err).NotTo(HaveOccurred())
-	defer func(cloudSQLSuperUserConn *sql.DB) {
-		_ = cloudSQLSuperUserConn.Close()
-	}(cloudSQLSuperUserConn)
-
-	_, err = cloudSQLSuperUserConn.Exec(fmt.Sprintf("CREATE DATABASE \"%s\"", database))
-	Expect(err).NotTo(HaveOccurred())
-}
 
 func buildConnectionString(username, password string, port int, database string) string {
 	return strings.Join([]string{
@@ -435,4 +387,47 @@ func applyHCL(hcl string, checkOnCreate, checkOnDestroy resource.TestCheckFunc) 
 			Check:        checkOnCreate,
 		}},
 	})
+}
+
+func preparePostgresInstance(pgVersion, dumpFile string) error {
+	cmd := exec.Command("/bin/bash", "-c", `
+		docker build \
+			--no-cache --tag "${IMAGE_TAG}"              \
+			--build-arg PG_VERSION="${PG_VERSION}"       \
+			--build-arg DUMP_FILE="${DUMP_FILE}"         \
+			csbpg/db_dumps_assets
+		docker run -d --name "test" -p 5999:5432             \
+			-v "${PWD}/testfixtures/ssl_postgres/:/mnt"  \
+			"${IMAGE_TAG}" -c config_file=/mnt/pgconf/postgresql.conf -c hba_file=/mnt/pgconf/pg_hba.conf
+		until [[ "$(docker inspect -f \{\{.State.Health.Status\}\} test)" == "healthy" ]]; do
+			sleep 0.1;
+		done;
+	`)
+	cmd.Env = append(cmd.Env, "PG_VERSION="+pgVersion)
+	cmd.Env = append(cmd.Env, "DUMP_FILE="+dumpFile)
+	cmd.Env = append(cmd.Env, "IMAGE_TAG="+strings.Split(dumpFile, ".")[0])
+
+	session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
+	Expect(err).NotTo(HaveOccurred())
+	defer session.Terminate()
+	Eventually(session, 180).Should(gexec.Exit())
+	return nil
+}
+
+func cleanPostgresInstance(pgVersion, dumpFile string) error {
+	cmd := exec.Command("/bin/sh", "-c", `
+		docker rm -f test
+		docker image rm -f ${IMAGE_TAG}
+		docker image rm -f postgres:${PG_VERSION}
+	`)
+	cmd.Env = append(cmd.Env, "PG_VERSION="+pgVersion)
+	cmd.Env = append(cmd.Env, "IMAGE_TAG="+strings.Split(dumpFile, ".")[0])
+
+	session, err := gexec.Start(cmd, GinkgoWriter, GinkgoWriter)
+	if err != nil {
+		return err
+	}
+	defer session.Terminate()
+	Eventually(session, 120).Should(gexec.Exit())
+	return nil
 }

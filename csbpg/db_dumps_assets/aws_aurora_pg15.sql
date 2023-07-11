@@ -1,8 +1,8 @@
 --
 -- PostgreSQL database cluster dump
 -- This dump was exported using the following command:
--- pg_dumpall --if-exists --clean --no-role-passwords --exclude-database rdsadmin -h SOME_HOST -U SOME_USER -f aws_pg14.sql
--- sed -i 's/SOME_USER/testuser/' aws_pg14.sql
+-- pg_dumpall --if-exists --clean --no-role-passwords --exclude-database rdsadmin -h SOME_HOST -U SOME_USER -f aws_aurora_pg15.sql
+-- sed -i 's/SOME_USER/testuser/' aws_aurora_pg15.sql
 --
 
 SET default_transaction_read_only = off;
@@ -22,7 +22,7 @@ DROP DATABASE IF EXISTS testdb;
 -- Drop tablespaces
 --
 
-DROP TABLESPACE IF EXISTS rds_temp_tablespace;
+DROP TABLESPACE IF EXISTS aurora_temp_tablespace;
 
 
 --
@@ -36,8 +36,6 @@ DROP ROLE IF EXISTS rds_password;
 DROP ROLE IF EXISTS rds_replication;
 DROP ROLE IF EXISTS rds_superuser;
 DROP ROLE IF EXISTS rdsadmin;
-DROP ROLE IF EXISTS rdsrepladmin;
-DROP ROLE IF EXISTS rdstopmgr;
 
 
 --
@@ -58,10 +56,7 @@ CREATE ROLE rds_superuser;
 ALTER ROLE rds_superuser WITH NOSUPERUSER INHERIT NOCREATEROLE NOCREATEDB NOLOGIN NOREPLICATION NOBYPASSRLS;
 CREATE ROLE rdsadmin;
 ALTER ROLE rdsadmin WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN REPLICATION BYPASSRLS VALID UNTIL 'infinity';
-CREATE ROLE rdsrepladmin;
-ALTER ROLE rdsrepladmin WITH NOSUPERUSER NOINHERIT NOCREATEROLE NOCREATEDB NOLOGIN REPLICATION NOBYPASSRLS;
-CREATE ROLE rdstopmgr;
-ALTER ROLE rdstopmgr WITH NOSUPERUSER INHERIT NOCREATEROLE NOCREATEDB LOGIN NOREPLICATION NOBYPASSRLS;
+
 --
 -- User Configurations
 --
@@ -71,155 +66,43 @@ ALTER ROLE rdstopmgr WITH NOSUPERUSER INHERIT NOCREATEROLE NOCREATEDB LOGIN NORE
 --
 
 ALTER ROLE rdsadmin SET "TimeZone" TO 'utc';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET log_statement TO 'all';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET log_min_error_statement TO 'debug5';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET log_min_messages TO 'panic';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET exit_on_error TO '0';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET statement_timeout TO '0';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET role TO 'rdsadmin';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET "auto_explain.log_min_duration" TO '-1';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET temp_file_limit TO '-1';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET search_path TO 'pg_catalog', 'public';
---
--- User Config "rdsadmin"
---
-
-ALTER ROLE rdsadmin SET synchronous_commit TO 'local';
---
--- User Config "rdsadmin"
---
-
+ALTER ROLE rdsadmin SET stats_fetch_consistency TO 'snapshot';
 ALTER ROLE rdsadmin SET default_tablespace TO '';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET "pg_hint_plan.enable_hint" TO 'off';
---
--- User Config "rdsadmin"
---
-
 ALTER ROLE rdsadmin SET default_transaction_read_only TO 'off';
---
--- User Configurations
---
-
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET log_statement TO 'all';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET log_min_error_statement TO 'debug5';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET log_min_messages TO 'panic';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET exit_on_error TO '0';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET statement_timeout TO '0';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET "TimeZone" TO 'utc';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET search_path TO 'pg_catalog', 'public';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET "auto_explain.log_min_duration" TO '-1';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET role TO 'rdstopmgr';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET temp_file_limit TO '-1';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET "pg_hint_plan.enable_hint" TO 'off';
---
--- User Config "rdstopmgr"
---
-
-ALTER ROLE rdstopmgr SET default_transaction_read_only TO 'off';
 
 
 --
 -- Role memberships
 --
 
+GRANT pg_checkpoint TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
 GRANT pg_monitor TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
-GRANT pg_monitor TO rdstopmgr GRANTED BY rdsadmin;
+GRANT pg_read_all_data TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
 GRANT pg_signal_backend TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
+GRANT pg_write_all_data TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
 GRANT rds_password TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
 GRANT rds_replication TO rds_superuser WITH ADMIN OPTION GRANTED BY rdsadmin;
 GRANT rds_superuser TO "testuser" GRANTED BY rdsadmin;
+
+
 
 
 --
 -- Tablespaces
 --
 
-CREATE TABLESPACE rds_temp_tablespace OWNER rds_superuser LOCATION '/rdsdbdata/tmp/rds_temp_tablespace';
-GRANT ALL ON TABLESPACE rds_temp_tablespace TO PUBLIC;
+CREATE TABLESPACE aurora_temp_tablespace OWNER rds_superuser LOCATION '/rdsdbdata/tmp/aurora_temp_tablespace';
+GRANT ALL ON TABLESPACE aurora_temp_tablespace TO PUBLIC;
 
 
 --
@@ -234,8 +117,8 @@ GRANT ALL ON TABLESPACE rds_temp_tablespace TO PUBLIC;
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 14.7
--- Dumped by pg_dump version 14.8 (Debian 14.8-1.pgdg120+1)
+-- Dumped from database version 15.3
+-- Dumped by pg_dump version 15.3 (Debian 15.3-1.pgdg120+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -254,7 +137,7 @@ DROP DATABASE template1;
 -- Name: template1; Type: DATABASE; Schema: -; Owner: testuser
 --
 
-CREATE DATABASE template1 WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE = 'en_US.UTF-8';
+CREATE DATABASE template1 WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
 
 
 ALTER DATABASE template1 OWNER TO "testuser";
@@ -308,16 +191,6 @@ GRANT CONNECT ON DATABASE template1 TO PUBLIC;
 
 
 --
--- Name: SCHEMA public; Type: ACL; Schema: -; Owner: testuser
---
-
-REVOKE ALL ON SCHEMA public FROM rdsadmin;
-REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT ALL ON SCHEMA public TO "testuser";
-GRANT ALL ON SCHEMA public TO PUBLIC;
-
-
---
 -- PostgreSQL database dump complete
 --
 
@@ -329,8 +202,8 @@ GRANT ALL ON SCHEMA public TO PUBLIC;
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 14.7
--- Dumped by pg_dump version 14.8 (Debian 14.8-1.pgdg120+1)
+-- Dumped from database version 15.3
+-- Dumped by pg_dump version 15.3 (Debian 15.3-1.pgdg120+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -348,7 +221,7 @@ DROP DATABASE postgres;
 -- Name: postgres; Type: DATABASE; Schema: -; Owner: testuser
 --
 
-CREATE DATABASE postgres WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE = 'en_US.UTF-8';
+CREATE DATABASE postgres WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
 
 
 ALTER DATABASE postgres OWNER TO "testuser";
@@ -374,16 +247,6 @@ COMMENT ON DATABASE postgres IS 'default administrative connection database';
 
 
 --
--- Name: SCHEMA public; Type: ACL; Schema: -; Owner: testuser
---
-
-REVOKE ALL ON SCHEMA public FROM rdsadmin;
-REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT ALL ON SCHEMA public TO "testuser";
-GRANT ALL ON SCHEMA public TO PUBLIC;
-
-
---
 -- PostgreSQL database dump complete
 --
 
@@ -395,8 +258,8 @@ GRANT ALL ON SCHEMA public TO PUBLIC;
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 14.7
--- Dumped by pg_dump version 14.8 (Debian 14.8-1.pgdg120+1)
+-- Dumped from database version 15.3
+-- Dumped by pg_dump version 15.3 (Debian 15.3-1.pgdg120+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -413,7 +276,7 @@ SET row_security = off;
 -- Name: testdb; Type: DATABASE; Schema: -; Owner: testuser
 --
 
-CREATE DATABASE testdb WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE = 'en_US.UTF-8';
+CREATE DATABASE testdb WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
 
 
 ALTER DATABASE testdb OWNER TO "testuser";
@@ -430,16 +293,6 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
-
---
--- Name: SCHEMA public; Type: ACL; Schema: -; Owner: testuser
---
-
-REVOKE ALL ON SCHEMA public FROM rdsadmin;
-REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT ALL ON SCHEMA public TO "testuser";
-GRANT ALL ON SCHEMA public TO PUBLIC;
-
 
 --
 -- PostgreSQL database dump complete
