@@ -97,7 +97,7 @@ func sqlUserCreate(ctx context.Context, username, password string, m any) diag.D
 		// We need to do this before executing the createDataOwnerRole because there are some instructions in that function
 		// which can fail if there are tables in public schema for which the admin user doesn't have elevated permissions
 		if _, err = tx.Exec(fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(username), pq.QuoteIdentifier(cf.username))); err != nil {
-			return diag.Errorf("grant admin the right to impersonate new role and manipulate its objects: %s", err)
+			return diag.Errorf("grant admin the right to impersonate legecy role and manipulate its objects: %s", err)
 		}
 	}
 
