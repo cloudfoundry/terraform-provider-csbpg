@@ -84,7 +84,7 @@ func preparePostgresInstance(pgVersion, dumpFile string) (connectionFactory, err
 			--no-cache --tag "${IMAGE_TAG}"              \
 			--build-arg PG_VERSION="${PG_VERSION}"       \
 			--build-arg DUMP_FILE="${DUMP_FILE}"         \
-			db_dumps_assets
+			../testfixtures
 		docker run -d --rm --name "test" -p 5999:5432 "${IMAGE_TAG}"
 		until [[ "$(docker inspect -f \{\{.State.Health.Status\}\} test)" == "healthy" ]]; do
 			sleep 0.1;

@@ -395,9 +395,8 @@ func preparePostgresInstance(pgVersion, dumpFile string) error {
 			--no-cache --tag "${IMAGE_TAG}"              \
 			--build-arg PG_VERSION="${PG_VERSION}"       \
 			--build-arg DUMP_FILE="${DUMP_FILE}"         \
-			csbpg/db_dumps_assets
+			testfixtures
 		docker run -d --name "test" -p 5999:5432             \
-			-v "${PWD}/testfixtures/ssl_postgres/:/mnt"  \
 			"${IMAGE_TAG}" -c config_file=/mnt/pgconf/postgresql.conf -c hba_file=/mnt/pgconf/pg_hba.conf
 		until [[ "$(docker inspect -f \{\{.State.Health.Status\}\} test)" == "healthy" ]]; do
 			sleep 0.1;
