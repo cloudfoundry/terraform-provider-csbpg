@@ -83,7 +83,7 @@ func sqlUserCreate(ctx context.Context, username, password string, m any) diag.D
 	}()
 
 	log.Println("[DEBUG] connected")
-	if err := relaxPublicSchemaRestrictions(tx, cf); err != nil {
+	if err := grantAllPrivilegesToPublicSchema(tx, cf); err != nil {
 		return diag.FromErr(err)
 	}
 

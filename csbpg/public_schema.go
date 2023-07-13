@@ -8,7 +8,7 @@ import (
 	"github.com/lib/pq"
 )
 
-func relaxPublicSchemaRestrictions(tx *sql.Tx, cf connectionFactory) error {
+func grantAllPrivilegesToPublicSchema(tx *sql.Tx, cf connectionFactory) error {
 	log.Println("[DEBUG] make admin user owner of the public schema")
 	if _, err := tx.Exec(fmt.Sprintf("ALTER SCHEMA public OWNER TO %s", pq.QuoteIdentifier(cf.username))); err != nil {
 		return fmt.Errorf("make schema public be owned by admin user: %s", err)
