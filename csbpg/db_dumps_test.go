@@ -71,7 +71,7 @@ func testBindingCommonOps(pgVersion, dumpFile string) {
 			db, err := factory.ConnectAsUser("otheruser", "otheruser")
 			Expect(err).NotTo(HaveOccurred())
 			defer db.Close()
-			_, err = db.Exec("SELECT * FROM PUBLIC.NON-EXISTING;")
+			_, err = db.Exec("SELECT * FROM PUBLIC.NONEXISTING;")
 			Expect(err).To(HaveOccurred())
 		})
 
