@@ -99,7 +99,7 @@ func preparePostgresInstance(pgVersion, dumpFile string) (connectionFactory, err
 		return connectionFactory{}, err
 	}
 	defer session.Terminate()
-	Eventually(session, 180).Should(gexec.Exit())
+	Eventually(session, 180).Should(gexec.Exit(0))
 
 	return connectionFactory{
 		host:          "localhost",
