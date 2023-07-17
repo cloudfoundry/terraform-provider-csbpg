@@ -55,7 +55,15 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 
 	username := d.Get(bindingUsernameKey).(string)
 	password := d.Get(bindingPasswordKey).(string)
+	err := sqlUserCreate(ctx, username, password, m)
+	if err != nil {
+		return err
+	}
+	d.SetId(username)
+	return nil
+}
 
+func sqlUserCreate(ctx context.Context, username, password string, m any) diag.Diagnostics {
 	cf := m.(connectionFactory)
 
 	db, err := cf.ConnectAsAdmin()
@@ -118,7 +126,6 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 	}
 
 	log.Printf("[DEBUG] setting ID %s\n", username)
-	d.SetId(username)
 
 	return nil
 }
@@ -169,6 +176,14 @@ func resourceBindingUserDelete(ctx context.Context, d *schema.ResourceData, m an
 	bindingUser := d.Get(bindingUsernameKey).(string)
 	bindingUserPassword := d.Get(bindingPasswordKey).(string)
 
+	err := sqlUserDelete(ctx, bindingUser, bindingUserPassword, m)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func sqlUserDelete(ctx context.Context, bindingUser, bindingUserPassword string, m any) diag.Diagnostics {
 	cf := m.(connectionFactory)
 
 	userDb, err := cf.ConnectAsUser(bindingUser, bindingUserPassword)
