@@ -38,7 +38,11 @@ func testBindingCommonOps(pgVersion, dumpFile string) {
 		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE TABLE1();")
 		deleteUserWorks("someuser", "someuser", factory)
 
-		createUserFails("otheruser", "otheruser", factory, "granting table privilege to datawoner role: pq: permission denied for table table1")
+		if dumpFile == "aws_pg15.sql" || dumpFile == "aws_aurora_pg15.sql" {
+			createUserWorks("otheruser", "otheruser", factory)
+		} else {
+			createUserFails("otheruser", "otheruser", factory, "granting table privilege to datawoner role: pq: permission denied for table table1")
+		}
 	})
 
 	It("retains tables created by a binding even after the binding has been deleted", func() {
