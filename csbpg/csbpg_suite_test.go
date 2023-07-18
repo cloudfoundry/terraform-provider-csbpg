@@ -1,4 +1,4 @@
-package main_test
+package csbpg_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestTerraformProviderCSBPG(t *testing.T) {
+func TestCsbpg(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "TerraformProviderCSBPG Suite")
+	RunSpecs(t, "Csbpg Suite")
 }

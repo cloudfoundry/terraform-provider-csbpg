@@ -55,7 +55,15 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 
 	username := d.Get(bindingUsernameKey).(string)
 	password := d.Get(bindingPasswordKey).(string)
+	err := sqlUserCreate(ctx, username, password, m)
+	if err != nil {
+		return err
+	}
+	d.SetId(username)
+	return nil
+}
 
+func sqlUserCreate(ctx context.Context, username, password string, m any) diag.Diagnostics {
 	cf := m.(connectionFactory)
 
 	db, err := cf.ConnectAsAdmin()
@@ -75,16 +83,29 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 	}()
 
 	log.Println("[DEBUG] connected")
+	if err := grantAllPrivilegesToPublicSchema(tx, cf); err != nil {
+		return diag.FromErr(err)
+	}
+
+	userPresent, err := roleExists(tx, username)
+	if err != nil {
+		return diag.Errorf("checking whether binding user exists: %s", err)
+	}
+
+	if userPresent {
+		// The following instruction ensures admin has access and permissions over any objects created by the legacy user
+		// We need to do this before executing the createDataOwnerRole because there are some instructions in that function
+		// which can fail if there are tables in public schema for which the admin user doesn't have elevated permissions
+		if _, err = tx.Exec(fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(username), pq.QuoteIdentifier(cf.username))); err != nil {
+			return diag.Errorf("grant admin the right to impersonate legecy role and manipulate its objects: %s", err)
+		}
+	}
 
 	if err := createDataOwnerRole(tx, cf); err != nil {
 		return diag.FromErr(err)
 	}
 
 	log.Println("[DEBUG] create binding user")
-	userPresent, err := roleExists(tx, username)
-	if err != nil {
-		return diag.Errorf("checking whether binding user exists: %s", err)
-	}
 
 	if userPresent {
 		statements := []string{
@@ -118,7 +139,6 @@ func resourceBindingUserCreate(ctx context.Context, d *schema.ResourceData, m an
 	}
 
 	log.Printf("[DEBUG] setting ID %s\n", username)
-	d.SetId(username)
 
 	return nil
 }
@@ -168,20 +188,15 @@ func resourceBindingUserDelete(ctx context.Context, d *schema.ResourceData, m an
 
 	bindingUser := d.Get(bindingUsernameKey).(string)
 	bindingUserPassword := d.Get(bindingPasswordKey).(string)
-
-	cf := m.(connectionFactory)
-
-	userDb, err := cf.ConnectAsUser(bindingUser, bindingUserPassword)
+	err := sqlUserDelete(ctx, bindingUser, bindingUserPassword, m)
 	if err != nil {
-		return diag.Errorf("connecting as binding user: %s", err)
+		return err
 	}
-	defer func() {
-		_ = userDb.Close()
-	}()
+	return nil
+}
 
-	if _, err := userDb.ExecContext(ctx, fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(bindingUser), pq.QuoteIdentifier(cf.username))); err != nil {
-		return diag.Errorf("granting admin user access to binding user: %s", err)
-	}
+func sqlUserDelete(ctx context.Context, bindingUser, bindingUserPassword string, m any) diag.Diagnostics {
+	cf := m.(connectionFactory)
 
 	db, err := cf.ConnectAsAdmin()
 	if err != nil {
