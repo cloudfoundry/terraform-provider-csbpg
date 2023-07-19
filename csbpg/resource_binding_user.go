@@ -214,6 +214,10 @@ func sqlUserDelete(ctx context.Context, bindingUser, bindingUserPassword string,
 		_ = tx.Rollback()
 	}()
 
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(bindingUser), pq.QuoteIdentifier(cf.username))); err != nil {
+		return diag.Errorf("granting admin user access to binding user: %s", err)
+	}
+
 	log.Println("[DEBUG] dropping binding user")
 	statements := []string{
 		fmt.Sprintf("SET ROLE %s", pq.QuoteIdentifier(bindingUser)),
