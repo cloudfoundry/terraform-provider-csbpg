@@ -198,18 +198,6 @@ func resourceBindingUserDelete(ctx context.Context, d *schema.ResourceData, m an
 func sqlUserDelete(ctx context.Context, bindingUser, bindingUserPassword string, m any) diag.Diagnostics {
 	cf := m.(connectionFactory)
 
-	userDb, err := cf.ConnectAsUser(bindingUser, bindingUserPassword)
-	if err != nil {
-		return diag.Errorf("connecting as binding user: %s", err)
-	}
-	defer func() {
-		_ = userDb.Close()
-	}()
-
-	if _, err := userDb.ExecContext(ctx, fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(bindingUser), pq.QuoteIdentifier(cf.username))); err != nil {
-		return diag.Errorf("granting admin user access to binding user: %s", err)
-	}
-
 	db, err := cf.ConnectAsAdmin()
 	if err != nil {
 		return diag.Errorf("connecting as admin: %s", err)
@@ -225,6 +213,10 @@ func sqlUserDelete(ctx context.Context, bindingUser, bindingUserPassword string,
 	defer func() {
 		_ = tx.Rollback()
 	}()
+
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(bindingUser), pq.QuoteIdentifier(cf.username))); err != nil {
+		return diag.Errorf("granting admin user access to binding user: %s", err)
+	}
 
 	log.Println("[DEBUG] dropping binding user")
 	statements := []string{
