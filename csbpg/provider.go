@@ -24,62 +24,10 @@ const (
 func Provider() *schema.Provider {
 	return &schema.Provider{
 		Schema: map[string]*schema.Schema{
-			hostKey: {
-				Type:     schema.TypeString,
-				Required: true,
-			},
 			portKey: {
 				Type:         schema.TypeInt,
 				Required:     true,
 				ValidateFunc: validation.IsPortNumber,
-			},
-			usernameKey: {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			passwordKey: {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
-			},
-			databaseKey: {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			dataOwnerRoleKey: {
-				Type:     schema.TypeString,
-				Required: true,
-			},
-			sslModeKey: {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Default:     "verify-ca",
-				Description: "This option determines whether or with what priority a secure SSL TCP/IP connection will be negotiated with the PostgreSQL server",
-			},
-			clientCertKey: {
-				Type:        schema.TypeList,
-				Optional:    true,
-				Description: "SSL client certificate if required by the database.",
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"cert": {
-							Type:        schema.TypeString,
-							Description: "The SSL client certificate file path, must contain PEM encoded data.",
-							Required:    true,
-						},
-						"key": {
-							Type:        schema.TypeString,
-							Description: "The SSL client certificate private key, must contain PEM encoded data.",
-							Required:    true,
-						},
-					},
-				},
-				MaxItems: 1,
-			},
-			sslRootCertKey: {
-				Type:        schema.TypeString,
-				Description: "The SSL server root, must contain PEM encoded data.",
-				Optional:    true,
 			},
 		},
 		ConfigureContextFunc: providerConfigure,
