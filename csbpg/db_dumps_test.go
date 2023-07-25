@@ -41,7 +41,7 @@ func testBindingCommonOps(pgVersion, dumpFile string) {
 		if dumpFile == "aws_pg15.sql" || dumpFile == "aws_aurora_pg15.sql" {
 			createUserWorks("otheruser", "otheruser", factory)
 		} else {
-			createUserFails("otheruser", "otheruser", factory, "granting table privilege to datawoner role: pq: permission denied for table table1")
+			createUserFails("otheruser", "otheruser", factory, "granting table privilege to dataowner role: pq: permission denied for table table1")
 		}
 	})
 
