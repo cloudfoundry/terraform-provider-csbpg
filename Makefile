@@ -1,6 +1,6 @@
 .DEFAULT_GOAL = help
 
-GO-VERSION = 1.21.0
+GO-VERSION = 1.21.1
 GO-VER = go$(GO-VERSION)
 
 SRC = $(shell find . -name "*.go" | grep -v "_test\." )
