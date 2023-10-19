@@ -45,6 +45,81 @@ func testBindingCommonOps(pgVersion, dumpFile string) {
 		}
 	})
 
+	It("current automatic reassignment logic is cumbersome and introduces too many inconsistencies", func() {
+		createUserWorks("someuser", "someuser", factory)
+		createUserWorks("otheruser", "otheruser", factory)
+		createUserWorks("delete-me", "delete-me", factory)
+
+		// By default all users can create tables and schemas without any issues
+		customSqlWorks("someuser", "someuser", factory, "CREATE SCHEMA SCHEMA1;")
+		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE PUBLIC.TABLE1();")
+		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE SCHEMA1.TABLE1();")
+
+		// But new tables and schemas are not automatically accessible by existing bindings (this is not necessarily wrong nor bad)
+		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE1;", `pq: permission denied for table table1`)
+		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;", `pq: permission denied for schema schema1`)
+
+		// However, creating a new binding forces the reassignment of all tables in PUBLIC schema
+		// causing tables in PUBLIC schema to be accessible by every existing binding automagically
+		// while permissions for tables in any other schemas remain completely untouched
+		createUserWorks("thirduser", "thirduser", factory)
+		customSqlWorks("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE1;")
+		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;", `pq: permission denied for schema schema1`)
+		customSqlFails("otheruser", "otheruser", factory, "ALTER TABLE PUBLIC.TABLE1 ADD COLUMN COL1 VARCHAR;", `must be owner of table table1`)
+
+		customSqlWorks("thirduser", "thirduser", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE1;")
+		customSqlFails("thirduser", "thirduser", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;", `pq: permission denied for schema schema1`)
+		customSqlFails("thirduser", "thirduser", factory, "ALTER TABLE PUBLIC.TABLE1 ADD COLUMN COL1 VARCHAR;", `must be owner of table table1`)
+
+		// By the way, deleting a binding does not result in such reassignment logic to be applied
+		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE PUBLIC.TABLE2();")
+		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE2;", `pq: permission denied for table table2`)
+		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;", `pq: permission denied for schema schema1`)
+		customSqlFails("otheruser", "otheruser", factory, "ALTER TABLE PUBLIC.TABLE2 ADD COLUMN COL1 VARCHAR;", `must be owner of table table2`)
+
+		customSqlFails("thirduser", "thirduser", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE2;", `pq: permission denied for table table2`)
+		customSqlFails("thirduser", "thirduser", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;", `pq: permission denied for schema schema1`)
+		customSqlFails("thirduser", "thirduser", factory, "ALTER TABLE PUBLIC.TABLE2 ADD COLUMN COL1 VARCHAR;", `must be owner of table table2`)
+
+		deleteUserWorks("delete-me", "delete-me", factory)
+
+		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE2;", `pq: permission denied for table table2`)
+		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;", `pq: permission denied for schema schema1`)
+		customSqlFails("otheruser", "otheruser", factory, "ALTER TABLE PUBLIC.TABLE2 ADD COLUMN COL1 VARCHAR;", `must be owner of table table2`)
+		customSqlFails("otheruser", "otheruser", factory, "ALTER TABLE SCHEMA1.TABLE1 ADD COLUMN COL1 VARCHAR;", `pq: permission denied for schema schema1`)
+
+		customSqlFails("thirduser", "thirduser", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE2;", `pq: permission denied for table table2`)
+		customSqlFails("thirduser", "thirduser", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;", `pq: permission denied for schema schema1`)
+		customSqlFails("thirduser", "thirduser", factory, "ALTER TABLE PUBLIC.TABLE2 ADD COLUMN COL1 VARCHAR;", `must be owner of table table2`)
+		customSqlFails("thirduser", "thirduser", factory, "ALTER TABLE SCHEMA1.TABLE1 ADD COLUMN COL1 VARCHAR;", `pq: permission denied for schema schema1`)
+
+		// However, if the deleted binding owned any objects and/or schemas
+		// any existing and FUTURE binding will now be able to access and MODIFY them
+		deleteUserWorks("someuser", "someuser", factory)
+
+		customSqlWorks("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE2;")
+		customSqlWorks("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;")
+		customSqlWorks("otheruser", "otheruser", factory, "ALTER TABLE PUBLIC.TABLE2 ADD COLUMN COL1 VARCHAR;")
+		customSqlWorks("otheruser", "otheruser", factory, "ALTER TABLE SCHEMA1.TABLE1 ADD COLUMN COL1 VARCHAR;")
+		customSqlWorks("otheruser", "otheruser", factory, "CREATE TABLE SCHEMA1.TABLE2();")
+
+		createUserWorks("user-four", "user-four", factory)
+
+		customSqlWorks("user-four", "user-four", factory, "SELECT COUNT(1) FROM PUBLIC.TABLE2;")
+		customSqlWorks("user-four", "user-four", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE1;")
+		customSqlWorks("user-four", "user-four", factory, "ALTER TABLE PUBLIC.TABLE2 ADD COLUMN COL2 VARCHAR;")
+		customSqlWorks("user-four", "user-four", factory, "ALTER TABLE SCHEMA1.TABLE1 ADD COLUMN COL2 VARCHAR;")
+		customSqlWorks("user-four", "user-four", factory, "CREATE TABLE SCHEMA1.TABLE3();")
+
+		// But wait! New objects in the reassigned schema (reasonably) follow Postgres permissions
+		// and therefore they won't become accessible to other bindings unless explicitly granted
+		// (which is a pefectly reasonable behaviour, but a confusing one nonetheless
+		//  when analysed side-by-side with all the existing automagic reassignments going on)
+		customSqlFails("user-four", "user-four", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE2;", `pq: permission denied for table table2`)
+		customSqlWorks("otheruser", "otheruser", factory, `GRANT ALL ON SCHEMA1.TABLE2 TO "user-four";`)
+		customSqlWorks("user-four", "user-four", factory, "SELECT COUNT(1) FROM SCHEMA1.TABLE2;")
+	})
+
 	It("retains tables created by a binding even after the binding has been deleted", func() {
 		createUserWorks("someuser", "someuser", factory)
 		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE TABLE1();")
