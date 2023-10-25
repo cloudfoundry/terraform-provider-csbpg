@@ -24,6 +24,10 @@ func createDataOwnerRole(tx *sql.Tx, cf connectionFactory) error {
 		}
 	}
 
+	if _, err = tx.Exec(fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(cf.dataOwnerRole), pq.QuoteIdentifier(cf.username))); err != nil {
+		return fmt.Errorf("grant admin the right to impersonate new role and manipulate its objects: %s", err)
+	}
+
 	log.Println("[DEBUG] granting data owner role")
 	if _, err := tx.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s", pq.QuoteIdentifier(cf.database), pq.QuoteIdentifier(cf.dataOwnerRole))); err != nil {
 		return fmt.Errorf("granting database privilege to dataowner role: %w", err)
