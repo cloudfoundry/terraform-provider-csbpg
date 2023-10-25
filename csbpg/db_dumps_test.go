@@ -242,7 +242,6 @@ func createUserWorks(user, password string, factory connectionFactory) {
 	Expect(diag).To(BeNil())
 }
 
-
 func deleteUserWorks(user, password string, factory connectionFactory) {
 	diag := sqlUserDelete(context.TODO(), user, password, factory)
 	Expect(diag).To(BeNil())
