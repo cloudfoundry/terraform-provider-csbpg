@@ -129,9 +129,10 @@ func sqlUserCreate(ctx context.Context, username, password string, m any) diag.D
 		if _, err := tx.Exec(fmt.Sprintf("CREATE ROLE %s WITH LOGIN PASSWORD %s INHERIT IN ROLE %s", pq.QuoteIdentifier(username), safeQuote(password), pq.QuoteIdentifier(cf.dataOwnerRole))); err != nil {
 			return diag.Errorf("creating binding role: %s", err)
 		}
-		if _, err = tx.Exec(fmt.Sprintf("GRANT %s TO %s", pq.QuoteIdentifier(username), pq.QuoteIdentifier(cf.username))); err != nil {
-			return diag.Errorf("grant admin the right to impersonate new role and manipulate its objects: %s", err)
-		}
+	}
+
+	if _, err = tx.Exec(fmt.Sprintf("ALTER ROLE %s SET ROLE = %s", pq.QuoteIdentifier(username), pq.QuoteIdentifier(cf.dataOwnerRole))); err != nil {
+		return diag.Errorf("failed to alter new role to always impersonate the data owner role: %s", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -219,6 +220,7 @@ func sqlUserDelete(ctx context.Context, bindingUser, bindingUserPassword string,
 	}
 
 	log.Println("[DEBUG] dropping binding user")
+
 	statements := []string{
 		fmt.Sprintf("SET ROLE %s", pq.QuoteIdentifier(bindingUser)),
 		fmt.Sprintf("REASSIGN OWNED BY CURRENT_USER TO %s", pq.QuoteIdentifier(cf.dataOwnerRole)),

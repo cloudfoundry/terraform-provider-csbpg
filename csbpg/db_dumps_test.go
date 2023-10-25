@@ -129,6 +129,12 @@ func testBindingCommonOps(pgVersion, dumpFile string) {
 		customSqlWorks("athirduser", "athirduser", factory, "ALTER TABLE TABLE1 ADD COLUMN another_column TEXT;")
 	})
 
+	It("treats current binding as the owner of any new tables by default", func() {
+		createUserWorks("someuser", "someuser", factory)
+		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE TABLE1();")
+		customSqlReturns("someuser", "someuser", factory, "SELECT tableowner FROM pg_tables WHERE tablename = 'table1'", "someuser")
+	})
+
 	It("doesn't make tables visible by everyone immediately after their creation", func() {
 		createUserWorks("someuser", "someuser", factory)
 		createUserWorks("otheruser", "otheruser", factory)
