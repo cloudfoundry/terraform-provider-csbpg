@@ -242,13 +242,6 @@ func createUserWorks(user, password string, factory connectionFactory) {
 	Expect(diag).To(BeNil())
 }
 
-/* Commenting because the linter complains about this function not being used anymore
-func createUserFails(user, password string, factory connectionFactory, expected string) {
-	diag := sqlUserCreate(context.TODO(), user, password, factory)
-	Expect(diag).NotTo(BeNil())
-	Expect(diag[0].Summary).To(ContainSubstring(expected))
-}
-*/
 
 func deleteUserWorks(user, password string, factory connectionFactory) {
 	diag := sqlUserDelete(context.TODO(), user, password, factory)
