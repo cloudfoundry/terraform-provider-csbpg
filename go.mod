@@ -3,7 +3,7 @@ module github.com/cloudfoundry/terraform-provider-csbpg
 go 1.21
 
 require (
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.5.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.30.0
 	github.com/lib/pq v1.10.9
 	github.com/onsi/ginkgo/v2 v2.13.2
