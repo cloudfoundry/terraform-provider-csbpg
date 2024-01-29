@@ -5,6 +5,7 @@ This is a highly specialised Terraform provider designed to be used exclusively 
 - This provider handles TLS certificates as Terraform strings and not as files. This means that it can be used without creating local files to hold certificates, which solves some circular lifecycle issues around provider configuration.
 
 ## Usage
+
 ```terraform
 terraform {
   required_providers {
