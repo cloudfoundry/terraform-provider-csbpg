@@ -33,16 +33,12 @@ func testBindingCommonOps(pgVersion, dumpFile string) {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("retains tables created by a binding even after the binding has been deleted. BUT NEW BINDINGS FAIL IF THERE WASN'T ANOTHER ACTIVE BINDING. THIS IS A BUG!!!!", func() {
+	It("retains tables created by a binding even after the binding has been deleted, even in the previously failing scenario where the first binding was deleted before creating a second one", func() {
 		createUserWorks("someuser", "someuser", factory)
 		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE TABLE1();")
 		deleteUserWorks("someuser", "someuser", factory)
 
-		if dumpFile == "aws_pg15.sql" || dumpFile == "aws_aurora_pg15.sql" {
-			createUserWorks("otheruser", "otheruser", factory)
-		} else {
-			createUserFails("otheruser", "otheruser", factory, "granting table privilege to dataowner role: pq: permission denied for table table1")
-		}
+		createUserWorks("otheruser", "otheruser", factory)
 	})
 
 	It("current automatic reassignment logic is cumbersome and introduces too many inconsistencies", func() {
@@ -204,27 +200,19 @@ func testBindingCommonOps(pgVersion, dumpFile string) {
 		customSqlWorks("athirduser", "athirduser", factory, "ALTER TABLE TABLE1 ADD COLUMN another_column TEXT;")
 	})
 
-	It("doesn't make tables visible by everyone immediately after their creation", func() {
+	It("treats current binding as the owner of any new tables by default", func() {
 		createUserWorks("someuser", "someuser", factory)
-		createUserWorks("otheruser", "otheruser", factory)
-
 		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE TABLE1();")
-		customSqlWorks("someuser", "someuser", factory, "SELECT COUNT(1) FROM TABLE1;")
-		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM TABLE1;", `pq: permission denied for table table1`)
+		customSqlReturns("someuser", "someuser", factory, "SELECT tableowner FROM pg_tables WHERE tablename = 'table1'", "someuser")
 	})
 
-	It("only makes tables visible by everyone after a new binding is created", func() {
+	It("does make tables visible by everyone immediately after their creation", func() {
 		createUserWorks("someuser", "someuser", factory)
 		createUserWorks("otheruser", "otheruser", factory)
 
 		customSqlWorks("someuser", "someuser", factory, "CREATE TABLE TABLE1();")
 		customSqlWorks("someuser", "someuser", factory, "SELECT COUNT(1) FROM TABLE1;")
-		customSqlFails("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM TABLE1;", `pq: permission denied for table table1`)
-
-		createUserWorks("athirduser", "athirduser", factory)
-		customSqlWorks("someuser", "someuser", factory, "SELECT COUNT(1) FROM TABLE1;")
 		customSqlWorks("otheruser", "otheruser", factory, "SELECT COUNT(1) FROM TABLE1;")
-		customSqlWorks("athirduser", "athirduser", factory, "SELECT COUNT(1) FROM TABLE1;")
 	})
 
 	It("can perform all common operations with bindings", func() {
@@ -327,12 +315,6 @@ func cleanPostgresInstance(pgVersion, dumpFile string) error {
 func createUserWorks(user, password string, factory connectionFactory) {
 	diag := sqlUserCreate(context.TODO(), user, password, factory)
 	Expect(diag).To(BeNil())
-}
-
-func createUserFails(user, password string, factory connectionFactory, expected string) {
-	diag := sqlUserCreate(context.TODO(), user, password, factory)
-	Expect(diag).NotTo(BeNil())
-	Expect(diag[0].Summary).To(ContainSubstring(expected))
 }
 
 func deleteUserWorks(user, password string, factory connectionFactory) {

@@ -134,6 +134,10 @@ func sqlUserCreate(ctx context.Context, username, password string, m any) diag.D
 		}
 	}
 
+	if err := grantDefaultPrivilegesOnPublicTablesCreatedBy(tx, username); err != nil {
+		return diag.FromErr(err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return diag.Errorf("committing transaction: %s", err)
 	}
@@ -219,6 +223,11 @@ func sqlUserDelete(ctx context.Context, bindingUser, bindingUserPassword string,
 	}
 
 	log.Println("[DEBUG] dropping binding user")
+
+	if err := revokeDefaultPrivilegesOnPublicTablesCreatedBy(tx, bindingUser); err != nil {
+		return diag.FromErr(err)
+	}
+
 	statements := []string{
 		fmt.Sprintf("SET ROLE %s", pq.QuoteIdentifier(bindingUser)),
 		fmt.Sprintf("REASSIGN OWNED BY CURRENT_USER TO %s", pq.QuoteIdentifier(cf.dataOwnerRole)),
@@ -260,4 +269,18 @@ func roleExists(q querier, name string) (bool, error) {
 	}()
 
 	return rows.Next(), nil
+}
+
+func grantDefaultPrivilegesOnPublicTablesCreatedBy(tx *sql.Tx, username string) error {
+	if _, err := tx.Exec(fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA PUBLIC GRANT ALL ON TABLES TO PUBLIC", pq.QuoteIdentifier(username))); err != nil {
+		return fmt.Errorf("failed to grant default privileges on public tables created by %q: %s", username, err)
+	}
+	return nil
+}
+
+func revokeDefaultPrivilegesOnPublicTablesCreatedBy(tx *sql.Tx, username string) error {
+	if _, err := tx.Exec(fmt.Sprintf("ALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA PUBLIC REVOKE ALL ON TABLES FROM PUBLIC", pq.QuoteIdentifier(username))); err != nil {
+		return fmt.Errorf("failed to revoke default privileges on public tables created by %q: %s", username, err)
+	}
+	return nil
 }
