@@ -24,7 +24,7 @@ download: ## download dependencies
 
 vet: ## run static code analysis
 	go vet ./...
-	go run honnef.co/go/tools/cmd/staticcheck ./...
+	go tool staticcheck ./...
 
 checkfmt: ## check that the code is formatted correctly
 	@@if [ -n "$$(gofmt -s -e -l -d .)" ]; then \
@@ -33,18 +33,18 @@ checkfmt: ## check that the code is formatted correctly
 	fi
 
 checkimports: ## check that imports are formatted correctly
-	@@if [ -n "$$(go run golang.org/x/tools/cmd/goimports -l -d .)" ]; then \
+	@@if [ -n "$$(go tool goimports -l -d .)" ]; then \
 		echo "goimports check failed: run 'make fmt'";  \
 		exit 1; \
 	fi
 
 fmt: ## format the code
 	gofmt -s -e -l -w .
-	go run golang.org/x/tools/cmd/goimports -l -w .
+	go tool goimports -l -w .
 
 .PHONY: ginkgo
 ginkgo: ## run the tests with Ginkgo
-	go run github.com/onsi/ginkgo/v2/ginkgo -r -v
+	go tool ginkgo -r -v
 
 .PHONY: ginkgo-coverage
 ginkgo-coverage: ## ginkgo coverage score
