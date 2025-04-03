@@ -1,6 +1,6 @@
 module github.com/cloudfoundry/terraform-provider-csbpg
 
-go 1.24.1
+go 1.24.2
 require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.36.1
